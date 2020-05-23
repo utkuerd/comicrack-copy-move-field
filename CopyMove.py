@@ -178,6 +178,7 @@ class CopyMoveFieldForm(Form):
 		"Colorist",
 		"Count",
 		"Cover Artist",
+		"Date Published",
 		"Editor",
 		"Format",
 		"Genre",
@@ -268,6 +269,7 @@ class CopyMoveFieldForm(Form):
 		"Colorist",
 		"Count",
 		"Cover Artist",
+		"Date Released",
 		"Editor",
 		"Format",
 		"Genre",
@@ -450,6 +452,11 @@ class CopyMoveFieldForm(Form):
 		if self._source.SelectedItem == "User Text":
 			f, r = UserText(sender, self.books, self._UserText.Text, self._destination.SelectedItem.replace(" ", ""), self._append.Checked, self._seperator.Text)
 
+		elif self._source.SelectedItem == "Date Published" and self._destination.SelectedItem == "Date Released":
+			if self._move.Checked:
+				f, r = DateMove(sender, self.books)
+			else:	
+				f, r = DateCopy(sender, self.books)
 		else:
 			if self._move.Checked:
 				f, r = MoveField(sender, self.books, self._source.SelectedItem.replace(" ", ""), self._destination.SelectedItem.replace(" ", ""), self._append.Checked, self._seperator.Text)
@@ -500,7 +507,7 @@ def UserText(worker, books, text, destination, append, seperator):
 					setattr(book, destination, int(orig))
 				except ValueError:
 					failed += 1
-					report.Append("Unable to add user text %s: %s to %s in book\n\n%s Vol.%s #%s" % (source, orig, destination, book.ShadowSeries, book.ShadowVolume, book.ShadowNumber))
+					report.Append("Unable to add user text %s to %s in book\n\n%s Vol.%s #%s" % (orig, destination, book.ShadowSeries, book.ShadowVolume, book.ShadowNumber))
 
 		else:
 			try:
@@ -510,12 +517,70 @@ def UserText(worker, books, text, destination, append, seperator):
 					setattr(book, destination, int(text))
 				except ValueError:
 					failed += 1
-					report.Append("Unable to add user text %s: %s to %s in book\n\n%s Vol.%s #%s" % (source, unicode(getattr(book, readsource)), destination, book.ShadowSeries, book.ShadowVolume, book.ShadowNumber))
+					report.Append("Unable to add user text %s to %s in book\n\n%s Vol.%s #%s" % (text, destination, book.ShadowSeries, book.ShadowVolume, book.ShadowNumber))
 
 		count += 1
 		worker.ReportProgress(count)
 	return failed, report.ToString()
 
+def DateCopy(worker, books):
+	"""
+	This function takes Day, Month and Year fields, generates
+	and copies them into ReleasedTime fields.
+
+	worker->The background worker with which to report progress
+	books->The list or array of book objects
+	"""
+
+	failed = 0
+	count = 0
+	report = System.Text.StringBuilder()
+	for book in books:
+
+		if worker.CancellationPending:
+			return
+
+		year = getattr(book, "Year")
+		month = getattr(book, "Month")
+		day = getattr(book, "Day")
+		try:
+			date = System.DateTime(year, month, day)
+			book.ReleasedTime = date
+		except TypeError:
+			failed += 1
+			report.Append("Unable to copy date %d/%d/%d to released field of the book\n\n%s Vol.%s #%s" % (day, month, year, book.ShadowSeries, book.ShadowVolume, book.ShadowNumber))
+	return failed, report.ToString()
+
+def DateMove(worker, books):
+	"""
+	This function takes Day, Month and Year fields, generates
+	and copies them into ReleasedTime fields.
+
+	worker->The background worker with which to report progress
+	books->The list or array of book objects
+	"""
+
+	failed = 0
+	count = 0
+	report = System.Text.StringBuilder()
+	for book in books:
+
+		if worker.CancellationPending:
+			return
+		
+		year = getattr(book, "Year")
+		month = getattr(book, "Month")
+		day = getattr(book, "Day")
+		try:
+			date = System.DateTime(year, month, day)
+			book.ReleasedTime = date
+			book.Year = -1
+			book.Month = -1
+			book.Day = -1
+		except TypeError:
+			failed += 1
+			report.Append("Unable to move date %d/%d/%d to released field of the book\n\n%s Vol.%s #%s" % (day, month, year, book.ShadowSeries, book.ShadowVolume, book.ShadowNumber))
+	return failed, report.ToString()
 
 def CopyField(worker, books, source, destination, append, seperator):
 	"""
